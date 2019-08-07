@@ -1,0 +1,2 @@
+kubadm_token: abcdef.0123456789abcdef
+kubadm_pod_network: 10.244.0.0/16 # pour flannel

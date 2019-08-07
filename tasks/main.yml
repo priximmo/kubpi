@@ -1,0 +1,77 @@
+
+- name: ajout du hostname dans /etc/hosts
+  lineinfile:
+    dest: /etc/hosts
+    regexp: "^{{ ansible_default_ipv4.address }}.+$"
+    line: "{{ ansible_default_ipv4.address }} {{ ansible_hostname }}"
+
+- name: ajout des cgroups dans /boot/cmdline.txt
+  template:
+    src: cmdline.txt.j2
+    dest: /boot/cmdline.txt
+    owner: root
+    group: root
+    mode: 0755
+
+- name: désactivation du swap
+  shell: dphys-swapfile swapoff && dphys-swapfile uninstall && update-rc.d dphys-swapfile remove
+  ignore_errors: True
+
+- name: swapoff
+  shell: swapoff -a
+
+- name: vérification si docker existe
+  stat:
+    path: /usr/bin/docker
+  register: docker_exist
+  ignore_errors: True
+
+- name: installation de docker si absent
+  shell: curl -fsSL https://get.docker.com | sh;
+  when: docker_exist.stat.exists == False
+
+- name: changement de conf pour les bridges
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: 1
+    state: present
+
+- name: installation de apt-transport-https
+  apt:
+    name: apt-transport-https
+    state: present
+
+- name: ajout dépôt kub - key
+  shell: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+  args:
+    warn: no
+
+- name: ajout dépôt kub - source
+  template:
+    src: kubernetes.list.j2
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    owner: root
+    group: root
+    mode: 0644
+
+- name: apt-get update
+  apt:
+    update_cache: yes
+
+- name: installation des paquets kubernetes
+  apt:
+    name: 
+    - "kubelet"
+    - "kubeadm"
+    - "kubectl"
+    - "kubernetes-cni"
+    state: present
+    force: yes
+
+- name: installation du master
+  include: master.yml
+  when: consul_master is defined
+
+- name: installation des nodes
+  include: nodes.yml
+  when: consul_master is not defined

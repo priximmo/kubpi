@@ -1,0 +1,16 @@
+
+- name: clean
+  shell: kubeadm reset -f
+  register: kubeadm_reset
+
+- name: ajout des nodes au cluster
+  shell: kubeadm join --ignore-preflight-errors=all --token "{{ kubadm_token }}" {{ ip_master }}:6443 --discovery-token-unsafe-skip-ca-verification
+  when: kubeadm_reset is succeeded
+
+- name: restart et enable de kubelet
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+

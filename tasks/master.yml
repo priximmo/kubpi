@@ -1,0 +1,49 @@
+
+
+- name: on supprime si déjà existant
+  shell: kubeadm reset -f
+  register: kubeadm_reset
+
+- name: kubadm init pour le master
+  shell: kubeadm init --apiserver-advertise-address={{ ip_master }} --token="{{ kubadm_token }}" --pod-network-cidr={{ kubadm_pod_network }}
+  register: kubeadm_init
+  when: kubeadm_reset is succeeded
+
+- name: root home directory
+  shell: echo $HOME
+  register: root_home
+
+- name: création du directory .kube
+  file:
+    path: "{{ root_home.stdout }}/.kube/"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: copie de admin.conf dans le directory de root
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ root_home.stdout }}/.kube/config"
+    owner: root
+    group: root
+    mode: 0600
+    remote_src: yes
+    backup: yes
+  when: kubeadm_init
+
+#- name: ajout du master au cluster
+#  shell: kubeadm join --ignore-preflight-errors=all --token {{ kubadm_token }} {{ groups['master'][0] }}:6443 --discovery-token-unsafe-skip-ca-verification
+#  when: kubeadm_reset is succeeded
+
+- name: ajout de flannel pour le network
+  shell: "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/a70459be0084506e4ec919aa1c114638878db11b/Documentation/kube-flannel.yml"
+
+- name: restart de kubelet et enable du service
+  systemd:
+    name: kubelet
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+
+
